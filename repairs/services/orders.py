@@ -100,12 +100,12 @@ def execute(order_id, actor, action, data, version):
         if amount <= 0 or amount > order.balance:
             raise ValidationError('Оплата должна быть больше нуля и не превышать остаток.')
         Payment.objects.create(order=order, author=actor, amount=amount, method=data['method'], request_key=data['request_key'])
-        audit(order, actor, f'Учебная оплата: {amount} ₽')
+        audit(order, actor, f'Регистрация оплаты: {amount} ₽')
     elif action == 'issue':
         require(actor, RECEPTION)
         expect(order, S.READY)
         if order.balance != Decimal('0'):
-            raise ValidationError('Перед выдачей полностью зарегистрируйте учебную оплату.')
+            raise ValidationError('Перед выдачей полностью зарегистрируйте оплату.')
         if order.final_total == 0 and not data['free_reason'].strip():
             raise ValidationError('Укажите причину бесплатного ремонта.')
         order.free_reason = data['free_reason']

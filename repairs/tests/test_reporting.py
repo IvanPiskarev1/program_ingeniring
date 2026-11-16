@@ -35,7 +35,7 @@ class ReportingTests(WorkflowFixture):
         response = self.client.get(reverse('reports'), {'format':'xlsx'})
         book = load_workbook(io.BytesIO(response.content))
         rows = list(book.active.values)
-        self.assertIn(('Учебные оплаты, ₽ (не выручка)', '2000.00', None, None), rows)
+        self.assertIn(('Зарегистрировано оплат, ₽', '2000.00', None, None), rows)
         device_row = next(row for row in rows if row[0] == self.order.number)
         self.assertTrue(device_row[1].startswith("'="))
         response = self.client.get(reverse('reports'), {'format':'csv'})

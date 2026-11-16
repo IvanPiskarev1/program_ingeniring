@@ -76,7 +76,7 @@ class PaymentForm(forms.ModelForm):
     class Meta:
         model = Payment
         fields = ['amount', 'method']
-        labels = {'amount': 'Сумма учебной оплаты, ₽', 'method': 'Способ расчёта'}
+        labels = {'amount': 'Сумма оплаты, ₽', 'method': 'Способ расчёта'}
 
 
 class IssueForm(forms.Form):

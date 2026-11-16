@@ -102,7 +102,7 @@ def order_context(request, order):
     if has_role(user, MANAGER) and order.status in ('received', 'diagnosis', 'repair'): actions.insert(0, ('assign', 'Назначить мастера'))
     if has_role(user, QUALITY) and order.status == 'quality': actions.append(('quality', 'Провести контроль качества'))
     if has_role(user, RECEPTION) and order.status == 'ready':
-        actions.extend([('payment', 'Учебная оплата'), ('issue', 'Выдать устройство')])
+        actions.extend([('payment', 'Зарегистрировать оплату'), ('issue', 'Выдать устройство')])
     return {'order': order, 'actions': actions, 'history': order.history.select_related('author'),
         'checks': order.checks.select_related('author'), 'notifications': order.history.select_related('notification'),
         'audit': order.auditevent_set.select_related('actor')[:20]}
@@ -119,7 +119,7 @@ ACTION_FORMS = {'assign': forms.AssignForm, 'start': forms.EmptyForm, 'diagnosis
     'payment': forms.PaymentForm, 'issue': forms.IssueForm}
 ACTION_TITLES = {'assign': 'Назначить мастера', 'start': 'Начать диагностику', 'diagnosis': 'Диагностика',
     'work': 'Добавить работу', 'part': 'Добавить деталь', 'to_quality': 'Передать на контроль', 'quality': 'Контроль качества',
-    'payment': 'Учебная оплата', 'issue': 'Выдача устройства'}
+    'payment': 'Зарегистрировать оплату', 'issue': 'Выдача устройства'}
 
 
 @staff_required
@@ -144,7 +144,7 @@ def order_action(request, pk, action):
             form.add_error(None, exc)
             status = 400
         else:
-            messages.success(request, 'Изменения сохранены.' if action != 'payment' else 'Учебная оплата записана. Это не банковское подтверждение и не фискальный чек.')
+            messages.success(request, 'Изменения сохранены.' if action != 'payment' else 'Запись об оплате сохранена.')
             if not visible_orders(request.user).filter(pk=pk).exists():
                 return redirect('orders')
             return redirect('order_detail', pk=pk)

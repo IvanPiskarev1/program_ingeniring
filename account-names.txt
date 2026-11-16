@@ -1,0 +1,6 @@
+Новые логины; пароли и роли остались прежними.
+demo_reception → anna.sokolova: Анна Соколова
+demo_master → sergey.volkov: Сергей Волков
+demo_quality → elena.morozova: Елена Морозова
+demo_manager → andrey.kuznetsov: Андрей Кузнецов
+demo_admin → pavel.orlov: Павел Орлов
