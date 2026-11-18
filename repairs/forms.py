@@ -12,6 +12,7 @@ class IntakeForm(forms.Form):
     contact = forms.CharField(label='Контактное лицо', max_length=160, required=False)
     phone = forms.CharField(label='Телефон', max_length=30, required=False)
     email = forms.EmailField(label='E-mail', required=False)
+    email_notifications = forms.BooleanField(label='Клиент согласен получать уведомления о статусе по почте (для нового клиента)', required=False)
     existing_device = forms.ModelChoiceField(label='Ранее принятое изделие', queryset=Device.objects.all(), required=False, empty_label='Новое изделие - заполнить ниже')
     device_type = forms.ModelChoiceField(label='Тип техники', queryset=DeviceType.objects.all(), required=False)
     manufacturer = forms.CharField(label='Производитель', max_length=100, required=False)
@@ -23,6 +24,8 @@ class IntakeForm(forms.Form):
     def clean(self):
         data = super().clean()
         if not data.get('existing_client'):
+            if data.get('email_notifications') and not data.get('email'):
+                self.add_error('email', 'Укажите почту для уведомлений.')
             for name in ('client_name', 'phone'):
                 if not data.get(name):
                     self.add_error(name, 'Заполните поле или выберите существующего клиента.')

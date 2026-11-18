@@ -17,13 +17,8 @@ def audit(order, actor, action):
 
 def event(order, actor, old='', comment=''):
     item = StatusHistory.objects.create(order=order, old_status=old, new_status=order.status, author=actor, comment=comment)
-    template = NotificationTemplate.objects.filter(name='Смена статуса').first()
-    text = template.text if template else '{number}: {status}'
-    try:
-        text = text.format(number=order.number, status=order.get_status_display())
-    except (KeyError, ValueError, IndexError):
-        text = f'{order.number}: {order.get_status_display()}'
-    Notification.objects.create(event=item, text=text, state='pending')
+    from .email_notifications import enqueue
+    enqueue(item, order)
 
 
 def require(user, *roles):

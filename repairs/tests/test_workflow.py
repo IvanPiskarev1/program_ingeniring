@@ -125,12 +125,27 @@ class WorkflowTests(WorkflowFixture):
                 self.assertEqual(self.client.get(reverse(name, args=args)).status_code, 200)
         self.assertEqual(self.client.get(reverse('qr', args=[self.order.pk]))['Content-Type'], 'image/png')
     def test_notifications_idempotent(self):
-        call_command('send_notifications', verbosity=0)
-        call_command('send_notifications', verbosity=0)
-        notification = self.order.history.first().notification
+        from django.core import mail
+        from django.test import override_settings
+        # Without consent or address the event is queued as skipped, never sent.
+        event(self.order, self.users['Приём'])
+        skipped = self.order.history.first().notification
+        self.assertEqual(skipped.state, 'skipped')
+        # With consent the queued message is sent once; a repeated run must not resend.
+        self.customer.email = 'client@example.com'
+        self.customer.email_notifications = True
+        self.customer.save()
+        event(self.order, self.users['Приём'])
+        with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+            call_command('send_notifications', verbosity=0)
+            call_command('send_notifications', verbosity=0)
+        notification = self.order.history.last().notification
         notification.refresh_from_db()
-        self.assertEqual(notification.state, 'test')
+        self.assertEqual(notification.state, 'sent')
         self.assertEqual(notification.attempts, 1)
+        self.assertEqual(notification.recipient, 'client@example.com')
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(self.order.number, mail.outbox[0].subject)
     def test_blocked_user_cannot_sign_in(self):
         user = self.users['Мастер']; user.is_active=False; user.save()
         self.assertFalse(self.client.login(username=user.username, password='OnlyForUnitTests_928'))

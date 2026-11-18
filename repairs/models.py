@@ -46,6 +46,7 @@ class Client(models.Model):
     contact = models.CharField('Контактное лицо', max_length=160, blank=True)
     phone = models.CharField('Телефон', max_length=30, validators=[RegexValidator(r'^\+?[\d\s()\-]{7,30}$', 'Введите телефон: от 7 цифр, допустимы +, пробелы и скобки.')])
     email = models.EmailField('E-mail', blank=True)
+    email_notifications = models.BooleanField('Согласие на уведомления по почте', default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         verbose_name = 'клиент'
@@ -174,7 +175,10 @@ class Notification(models.Model):
     event = models.OneToOneField(StatusHistory, on_delete=models.PROTECT, related_name='notification')
     channel = models.CharField(max_length=12, default='journal')
     text = models.TextField()
-    state = models.CharField(max_length=12, default='pending', choices=[('pending', 'Ожидает учебной обработки'), ('test', 'Учебное · не отправлено'), ('error', 'Ошибка обработки')])
+    recipient = models.EmailField(blank=True)
+    state = models.CharField(max_length=12, default='pending', choices=[('pending', 'Ожидает отправки'), ('sending', 'Передаётся серверу'), ('sent', 'Передано почтовому серверу'), ('skipped', 'Не отправляется'), ('unknown', 'Результат неизвестен'), ('test', 'Старая запись'), ('error', 'Ошибка отправки')])
+    sent_at = models.DateTimeField(null=True, blank=True)
+    next_attempt_at = models.DateTimeField(null=True, blank=True)
     attempts = models.PositiveIntegerField(default=0)
     error = models.TextField(blank=True)
     created_at = models.DateTimeField(default=timezone.now)

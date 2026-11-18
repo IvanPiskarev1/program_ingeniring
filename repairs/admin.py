@@ -17,7 +17,7 @@ for model in (models.RepairOrder, models.Diagnosis, models.RepairWork, models.Us
 
 @admin.register(models.Client)
 class ClientAdmin(admin.ModelAdmin):
-    list_display = ['name', 'kind', 'phone', 'email']
+    list_display = ['name', 'kind', 'phone', 'email', 'email_notifications']
     search_fields = ['name', 'phone']
     def has_delete_permission(self, request, obj=None): return False
 

@@ -19,7 +19,7 @@
 <p>Плановая дата: {{ order.due_date|date:'d.m.Y'|default:'После диагностики' }}<br>Предварительная оценка: {{ order.estimate|default_if_none:'После диагностики' }}{% if order.estimate != None %} ₽{% endif %}</p>
 <h2>Отслеживание</h2><p class="break">{{ tracking_url }}</p>
 <p>Номер: {{ order.number }}<br>Секретный код: <code class="break">{{ order.token }}</code></p>
-<p>Передавайте код только владельцу заказа. QR с localhost доступен только на этом компьютере.</p>
+<p>Передавайте код только владельцу заказа.</p>
 <div class="signatures">
 <div><p><strong>Принял</strong></p><p>Подпись: __________________</p><p>ФИО: {% if received_by %}{{ received_by.get_full_name|default:'__________________________' }}{% else %}__________________________{% endif %}</p></div>
 <div><p><strong>Сдал</strong></p><p>Подпись: __________________</p><p>ФИО: __________________________</p></div>

@@ -62,5 +62,14 @@ SECURE_SSL_REDIRECT = not DEBUG
 SECURE_REFERRER_POLICY = 'same-origin'
 X_FRAME_OPTIONS = 'DENY'
 PUBLIC_BASE_URL = os.environ.get('ASUI_PUBLIC_URL', '').rstrip('/')
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_TIMEOUT = 20
+EMAIL_HOST_USER = 'service.center.asui@gmail.com'
+EMAIL_HOST_PASSWORD = os.environ.get('ASUI_EMAIL_PASSWORD', '')
+DEFAULT_FROM_EMAIL = 'АСУИ Сервисный центр <service.center.asui@gmail.com>'
+ASUI_EMAIL_TEST_RECIPIENT = 'vapi64255899@gmail.com'
 # Local single-process protection. Use a shared cache/reverse proxy in production.
 CACHES = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}

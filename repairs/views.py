@@ -81,7 +81,7 @@ def order_new(request):
             old = RepairOrder.objects.filter(request_key=data['request_key']).first()
             if old:
                 return redirect('order_detail', pk=old.pk)
-            client = data['existing_client'] or Client.objects.create(kind=data['kind'], name=data['client_name'], contact=data['contact'], phone=data['phone'], email=data['email'])
+            client = data['existing_client'] or Client.objects.create(kind=data['kind'], name=data['client_name'], contact=data['contact'], phone=data['phone'], email=data['email'], email_notifications=data['email_notifications'])
             device = data['existing_device'] or Device.objects.create(kind=data['device_type'], manufacturer=data['manufacturer'], model=data['device_model'], serial=data['serial'])
             order = RepairOrder.objects.create(client=client, device=device, problem=data['problem'], accessories=data['accessories'], appearance=data['appearance'], request_key=data['request_key'])
             event(order, request.user)
