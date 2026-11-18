@@ -6,13 +6,13 @@ from .models import Client, Device, DeviceType, Diagnosis, Payment, QualityCheck
 
 class IntakeForm(forms.Form):
     request_key = forms.UUIDField(widget=forms.HiddenInput, initial=uuid.uuid4)
-    existing_client = forms.ModelChoiceField(label='Существующий клиент', queryset=Client.objects.all(), required=False, empty_label='Новый клиент — заполнить ниже')
+    existing_client = forms.ModelChoiceField(label='Существующий клиент', queryset=Client.objects.all(), required=False, empty_label='Новый клиент - заполнить ниже')
     kind = forms.ChoiceField(label='Тип клиента', choices=Client._meta.get_field('kind').choices)
     client_name = forms.CharField(label='Имя / организация', max_length=160, required=False)
     contact = forms.CharField(label='Контактное лицо', max_length=160, required=False)
     phone = forms.CharField(label='Телефон', max_length=30, required=False)
     email = forms.EmailField(label='E-mail', required=False)
-    existing_device = forms.ModelChoiceField(label='Ранее принятое изделие', queryset=Device.objects.all(), required=False, empty_label='Новое изделие — заполнить ниже')
+    existing_device = forms.ModelChoiceField(label='Ранее принятое изделие', queryset=Device.objects.all(), required=False, empty_label='Новое изделие - заполнить ниже')
     device_type = forms.ModelChoiceField(label='Тип техники', queryset=DeviceType.objects.all(), required=False)
     manufacturer = forms.CharField(label='Производитель', max_length=100, required=False)
     device_model = forms.CharField(label='Модель', max_length=120, required=False)

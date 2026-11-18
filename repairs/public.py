@@ -89,6 +89,17 @@ def qr_image(request, pk):
 
 @staff_required
 @never_cache
-def print_order(request, pk):
+def print_order(request, pk, document='intake'):
     order = get_object_or_404(visible_orders(request.user), pk=pk)
-    return render(request, 'repairs/print.html', {'order': order, 'tracking_url': tracking_url(request, order)})
+    if document == 'issue' and (order.status != RepairOrder.Status.ISSUED or not order.issued_at):
+        return render(request, 'error.html', {
+            'code': '409', 'title': 'Изделие ещё не выдано',
+            'description': 'Печать выдачи доступна только после регистрации выдачи в карточке заказа.',
+        }, status=409)
+    intake = order.history.filter(new_status=RepairOrder.Status.RECEIVED).select_related('author').first()
+    return render(request, 'repairs/print.html', {
+        'order': order, 'tracking_url': tracking_url(request, order),
+        'is_intake': document == 'intake',
+        'document_title': 'Приём изделия' if document == 'intake' else 'Выдача изделия',
+        'received_by': intake.author if intake else None,
+    })

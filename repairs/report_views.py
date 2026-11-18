@@ -27,7 +27,7 @@ def reports(request):
         data = report_data(start, end)
         data['registered_payments'] = data['demo_revenue'] + data['real_revenue']
         if request.GET.get('format') in ('csv', 'xlsx'):
-            rows = [['Отчёт АСУИ', f'{start} — {end}'], ['Принято заказов', data['received']], ['Выдано заказов', data['issued']],
+            rows = [['Отчёт АСУИ', f'{start} - {end}'], ['Принято заказов', data['received']], ['Выдано заказов', data['issued']],
                 ['Средний полный цикл, дней', data['average_days'] if data['average_days'] is not None else 'Нет данных'],
                 ['Время в ремонте, часов', data['repair_hours'] if data['repair_hours'] is not None else 'Нет данных'],
                 ['Зарегистрировано оплат, ₽', str(data['demo_revenue'] + data['real_revenue'])],

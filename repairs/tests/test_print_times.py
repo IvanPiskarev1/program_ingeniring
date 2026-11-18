@@ -13,14 +13,12 @@ class PrintTimesTests(WorkflowFixture):
     def setUp(self):
         super().setUp()
         self.client.force_login(self.users['Приём'])
-        self.url = reverse('print_order', args=[self.order.pk])
+        self.url = reverse('print_issue', args=[self.order.pk])
 
     def test_print_before_payment_and_issue(self):
         response = self.client.get(self.url)
-        self.assertContains(response, 'Оплаты ещё не зарегистрированы.')
-        self.assertContains(response, 'Изделие ещё не выдано.')
-        self.assertNotContains(response, 'Дата и время оплаты:')
-        self.assertNotContains(response, 'Дата и время выдачи:')
+        self.assertContains(response, 'Изделие ещё не выдано', status_code=409)
+        self.assertNotContains(response, 'Дата и время выдачи:', status_code=409)
 
     def test_print_all_payments_and_issue_in_local_time(self):
         times = [datetime(2026, 11, 17, 20, 15, tzinfo=datetime_timezone.utc),
@@ -37,12 +35,8 @@ class PrintTimesTests(WorkflowFixture):
         self.assertContains(response, '17.11.2026 23:15 · Наличные · 500,00 ₽')
         self.assertContains(response, '18.11.2026 10:35 · Карта · 1500,00 ₽')
         self.assertContains(response, 'Дата и время выдачи: 18.11.2026 11:45 · Лично владельцу')
-        self.assertNotContains(response, 'Оплаты ещё не зарегистрированы.')
-        self.assertNotContains(response, 'Изделие ещё не выдано.')
 
-    def test_print_partial_payment_before_issue(self):
+    def test_partial_payment_does_not_unlock_issue_print(self):
         Payment.objects.create(order=self.order, amount=Decimal('500'), method='cash',
                                request_key=uuid.uuid4(), author=self.users['Приём'])
-        response = self.client.get(self.url)
-        self.assertContains(response, 'Дата и время оплаты:', count=1)
-        self.assertContains(response, 'Изделие ещё не выдано.')
+        self.assertEqual(self.client.get(self.url).status_code, 409)
