@@ -10,6 +10,8 @@ cd C:\Prolog\9-10\app\service_center
 
 .venv\Scripts\python.exe manage.py send_notifications --watch --ask-password 
 
+.venv\Scripts\python.exe manage.py backup_database
+
 Из папки `service_center`:
 
 ```bat
