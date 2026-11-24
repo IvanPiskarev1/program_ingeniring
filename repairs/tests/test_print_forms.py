@@ -44,7 +44,7 @@ class PrintFormsTests(WorkflowFixture):
         employee.first_name = 'Анна'
         employee.last_name = 'Соколова'
         employee.save()
-        self.act('payment', {'amount': Decimal('2000'), 'method': 'cash', 'request_key': uuid.uuid4()}, 'Приём')
+        self.act('payment', {'amount': Decimal('2500'), 'method': 'cash', 'request_key': uuid.uuid4()}, 'Приём')
         self.act('issue', {'free_reason': '', 'issue_method': 'Представителю'}, 'Приём')
         before = (self.order.version, Payment.objects.count(), self.order.history.count())
         response = self.client.get(self.issue)

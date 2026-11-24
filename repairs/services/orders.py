@@ -58,9 +58,9 @@ def execute(order_id, actor, action, data, version):
         order.status = S.DIAGNOSIS
     elif action == 'diagnosis':
         expect(order, S.DIAGNOSIS)
-        Diagnosis.objects.create(order=order, author=actor, result=data['result'], category=data['category'], required_parts=data['required_parts'])
-        order.estimate = data['estimate']
-        order.due_date = data['due_date']
+        diag_price = data.get('diagnosis_price') or Decimal('500')
+        Diagnosis.objects.create(order=order, author=actor, result=data['result'], category=data['category'], required_parts=data['required_parts'], price=diag_price)
+        order.estimate = data['estimate'] + diag_price
         order.status = S.REPAIR
     elif action in ('work', 'part'):
         expect(order, S.REPAIR)

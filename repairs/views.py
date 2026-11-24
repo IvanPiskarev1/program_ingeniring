@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 from django.contrib import messages
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -17,7 +18,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from . import forms
-from .models import AuditEvent, Client, Device, RepairOrder
+from .models import AuditEvent, Client, Device, PriceItem, RepairOrder
 from .permissions import ADMIN, MANAGER, MASTER, QUALITY, RECEPTION, has_role, staff_required, visible_orders
 from .services.orders import Conflict, event, execute
 
@@ -127,7 +128,7 @@ def order_action(request, pk, action):
     order = get_object_or_404(visible_orders(request.user), pk=pk)
     if action not in dict(order_context(request, order)['actions']):
         raise PermissionDenied('Действие недоступно для вашей роли или текущего этапа.')
-    initial = {'amount': max(order.balance, 0), 'estimate': order.estimate, 'due_date': order.due_date}
+    initial = {'amount': max(order.balance, 0), 'estimate': order.estimate, 'due_date': order.due_date, 'diagnosis_price': Decimal('500')}
     form = ACTION_FORMS[action](request.POST or None, initial=initial)
     status = 200
     if request.method == 'POST' and form.is_valid():
@@ -150,6 +151,19 @@ def order_action(request, pk, action):
             return redirect('order_detail', pk=pk)
     return render(request, 'repairs/form_page.html', {'form': form, 'title': ACTION_TITLES[action], 'subtitle': f'{order.number} · {order.device}',
         'button': ACTION_TITLES[action], 'order': order, 'version': request.POST.get('version', order.version), 'is_payment': action == 'payment'}, status=status)
+
+
+@staff_required
+def price_list(request):
+    if not has_role(request.user, RECEPTION, MASTER, MANAGER, ADMIN): raise PermissionDenied
+    items = PriceItem.objects.all()
+    q = request.GET.get('q', '').strip()
+    if q:
+        items = items.filter(name__icontains=q)
+    kind = request.GET.get('kind', '')
+    if kind in dict(PriceItem.KIND):
+        items = items.filter(kind=kind)
+    return render(request, 'repairs/price_list.html', {'items': items, 'query': q, 'kind': kind, 'kinds': PriceItem.KIND})
 
 
 @staff_required

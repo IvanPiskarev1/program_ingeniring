@@ -16,6 +16,7 @@ urlpatterns = [
     path('clients/<int:pk>/', views.client_detail, name='client'),
     path('devices/<int:pk>/', views.device_detail, name='device'),
     path('masters/', views.masters, name='masters'),
+    path('price/', views.price_list, name='price_list'),
     path('reports/', report_views.reports, name='reports'),
     path('track/', public.track, name='track'),
     path('track/<str:token>/', public.status_page, name='public_status'),

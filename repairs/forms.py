@@ -1,7 +1,7 @@
 import uuid
 from django import forms
 from django.contrib.auth.models import User
-from .models import Client, Device, DeviceType, Diagnosis, Payment, QualityCheck, RepairOrder, RepairWork, UsedPart
+from .models import Client, Device, DeviceType, Diagnosis, Payment, PriceItem, QualityCheck, RepairOrder, RepairWork, UsedPart
 
 
 class IntakeForm(forms.Form):
@@ -46,7 +46,8 @@ class AssignForm(forms.Form):
 
 
 class DiagnosisForm(forms.ModelForm):
-    estimate = forms.DecimalField(label='Предварительная стоимость, ₽', min_value=0, max_digits=12, decimal_places=2)
+    estimate = forms.DecimalField(label='Предварительная стоимость ремонта, ₽ (без диагностики)', min_value=0, max_digits=12, decimal_places=2)
+    diagnosis_price = forms.DecimalField(label='Стоимость диагностики, ₽', min_value=0, max_digits=12, decimal_places=2, initial=500, required=False)
     due_date = forms.DateField(label='Плановая дата', widget=forms.DateInput(attrs={'type': 'date'}))
     class Meta:
         model = Diagnosis
@@ -54,16 +55,37 @@ class DiagnosisForm(forms.ModelForm):
         widgets = {'result': forms.Textarea(attrs={'rows': 3}), 'required_parts': forms.Textarea(attrs={'rows': 2})}
 
 
-class WorkForm(forms.ModelForm):
+class PriceChoiceForm(forms.Form):
+    """Select an item from the price list; leave blank to enter a custom row."""
+    price_item = forms.ModelChoiceField(label='Из прайс-листа', queryset=PriceItem.objects.filter(is_active=True), required=False, empty_label='Ввести вручную')
+
+
+class WorkForm(PriceChoiceForm, forms.ModelForm):
     class Meta:
         model = RepairWork
         fields = ['description', 'minutes', 'cost']
 
+    def clean(self):
+        data = super().clean()
+        item = data.get('price_item')
+        if item:
+            data['description'] = item.name
+            data['cost'] = item.price
+        return data
 
-class PartForm(forms.ModelForm):
+
+class PartForm(PriceChoiceForm, forms.ModelForm):
     class Meta:
         model = UsedPart
         fields = ['name', 'quantity', 'price']
+
+    def clean(self):
+        data = super().clean()
+        item = data.get('price_item')
+        if item:
+            data['name'] = item.name
+            data['price'] = item.price
+        return data
 
 
 class QualityForm(forms.ModelForm):

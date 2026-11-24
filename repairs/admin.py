@@ -29,7 +29,7 @@ class DeviceAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None): return False
 
 
-admin.site.register([models.DeviceType, models.FaultCategory, models.NotificationTemplate])
+admin.site.register([models.DeviceType, models.FaultCategory, models.NotificationTemplate, models.PriceItem])
 
 
 admin.site.unregister(User)

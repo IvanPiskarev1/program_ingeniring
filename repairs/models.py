@@ -68,6 +68,20 @@ class Device(models.Model):
         return f'{self.manufacturer} {self.model} · ID {self.pk}'
 
 
+class PriceItem(models.Model):
+    KIND = [('work', 'Работа'), ('part', 'Деталь'), ('diagnosis', 'Диагностика')]
+    kind = models.CharField('Вид', max_length=12, choices=KIND, db_index=True)
+    name = models.CharField('Название', max_length=180, unique=True)
+    price = models.DecimalField('Цена, ₽', max_digits=12, decimal_places=2, validators=[MinValueValidator(0)])
+    is_active = models.BooleanField('Действует', default=True)
+    class Meta:
+        verbose_name = 'позиция прайс-листа'
+        verbose_name_plural = 'Прайс-лист'
+        ordering = ['kind', 'name']
+    def __str__(self):
+        return f'{self.get_kind_display()}: {self.name} - {self.price} ₽'
+
+
 class IntakeRequest(models.Model):
     """Transactional reservation serializes duplicate intake submissions."""
     key = models.UUIDField(primary_key=True)
@@ -109,7 +123,8 @@ class RepairOrder(models.Model):
         return f'АС-{self.pk:06d}'
     @property
     def final_total(self):
-        return sum((w.cost for w in self.works.all()), Decimal('0.00')) + sum((p.quantity * p.price for p in self.parts.all()), Decimal('0.00'))
+        diagnosis_price = self.diagnosis.price if hasattr(self, 'diagnosis') else Decimal('0.00')
+        return diagnosis_price + sum((w.cost for w in self.works.all()), Decimal('0.00')) + sum((p.quantity * p.price for p in self.parts.all()), Decimal('0.00'))
     @property
     def paid_total(self):
         return sum((p.amount for p in self.payments.all()), Decimal('0.00'))
@@ -128,6 +143,7 @@ class Diagnosis(models.Model):
     result = models.TextField('Результаты диагностики')
     category = models.ForeignKey(FaultCategory, on_delete=models.PROTECT, verbose_name='Категория')
     required_parts = models.TextField('Необходимые детали', blank=True)
+    price = models.DecimalField('Стоимость диагностики, ₽', max_digits=12, decimal_places=2, default=Decimal('0.00'), validators=[MinValueValidator(0)])
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     created_at = models.DateTimeField(default=timezone.now)
 
@@ -155,7 +171,7 @@ class UsedPart(models.Model):
 class QualityCheck(models.Model):
     order = models.ForeignKey(RepairOrder, on_delete=models.PROTECT, related_name='checks')
     passed = models.BooleanField()
-    comment = models.TextField()
+    comment = models.TextField('Комментарий')
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     created_at = models.DateTimeField(default=timezone.now)
 
@@ -165,7 +181,7 @@ class StatusHistory(models.Model):
     old_status = models.CharField(max_length=12, choices=RepairOrder.Status.choices, blank=True)
     new_status = models.CharField(max_length=12, choices=RepairOrder.Status.choices)
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
-    comment = models.TextField(blank=True)
+    comment = models.TextField('Комментарий', blank=True)
     created_at = models.DateTimeField(default=timezone.now)
     class Meta:
         ordering = ['created_at', 'pk']

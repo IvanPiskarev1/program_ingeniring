@@ -37,10 +37,10 @@ class HttpFlowTests(WorkflowFixture):
         self.post_action('Мастер','work',{'description':'Доработка контакта','minutes':10,'cost':'0'})
         self.post_action('Мастер','to_quality')
         self.post_action('Контроль качества','quality', {'passed':'yes','comment':'Функциональный тест пройден'})
-        self.post_action('Приём','payment',{'request_key':str(uuid.uuid4()),'amount':'2000.00','method':'card'})
+        self.post_action('Приём','payment',{'request_key':str(uuid.uuid4()),'amount':'2500.00','method':'card'})
         self.post_action('Приём','issue',{'issue_method':'Лично владельцу','free_reason':''})
         self.assertEqual(self.order.status,'issued')
-        self.assertEqual(self.order.final_total,Decimal('2000'))
+        self.assertEqual(self.order.final_total,Decimal('2500'))
         self.assertEqual(self.order.history.count(),8)
     def test_forged_version_and_long_order_number(self):
         self.ready()
@@ -61,6 +61,8 @@ class HttpFlowTests(WorkflowFixture):
     def test_free_issue_requires_reason(self):
         self.ready()
         self.order.works.update(cost=0); self.order.parts.update(price=0)
+        if hasattr(self.order, 'diagnosis'):
+            self.order.diagnosis.price = 0; self.order.diagnosis.save()
         from django.core.exceptions import ValidationError
         with self.assertRaises(ValidationError): self.act('issue',{'issue_method':'Лично','free_reason':''},'Приём')
         self.act('issue',{'issue_method':'Лично','free_reason':'Учебная бесплатная диагностика'},'Приём')
@@ -77,7 +79,7 @@ class HttpFlowTests(WorkflowFixture):
             self.assertEqual(self.client.get('/missing-page/').status_code,404)
     def test_report_duration_known_timeline(self):
         self.ready()
-        self.act('payment',{'amount':Decimal('2000'),'method':'cash','request_key':uuid.uuid4()},'Приём')
+        self.act('payment',{'amount':Decimal('2500'),'method':'cash','request_key':uuid.uuid4()},'Приём')
         self.act('issue',{'issue_method':'Лично','free_reason':''},'Приём')
         now=timezone.now()
         RepairOrder.objects.filter(pk=self.order.pk).update(created_at=now-timedelta(days=4),issued_at=now)

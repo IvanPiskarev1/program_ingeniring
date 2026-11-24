@@ -52,9 +52,9 @@ class WorkflowTests(WorkflowFixture):
         self.act('work', {'description': 'Доработка контакта', 'minutes': 15, 'cost': Decimal('0')})
         self.act('to_quality')
         self.act('quality', {'passed': True, 'comment': 'Повторный тест пройден'}, 'Контроль качества')
-        self.assertEqual(self.order.final_total, Decimal('2000'))
+        self.assertEqual(self.order.final_total, Decimal('2500'))
         with self.assertRaises(ValidationError): self.act('issue', {'free_reason': '', 'issue_method': 'Лично'}, 'Приём')
-        self.act('payment', {'amount': Decimal('2000'), 'method': 'cash', 'request_key': uuid.uuid4()}, 'Приём')
+        self.act('payment', {'amount': Decimal('2500'), 'method': 'cash', 'request_key': uuid.uuid4()}, 'Приём')
         self.act('issue', {'free_reason': '', 'issue_method': 'Лично'}, 'Приём')
         self.assertEqual(self.order.status, 'issued')
         self.assertEqual(self.order.checks.count(), 2)
@@ -71,8 +71,8 @@ class WorkflowTests(WorkflowFixture):
     def test_payment_retry_and_overpayment(self):
         self.ready()
         version = self.order.version
-        data = {'amount': Decimal('2000'), 'method': 'cash', 'request_key': uuid.uuid4()}
-        execute(self.order.pk, self.users['Приём'], 'payment', data, version)
+        data = {'amount': Decimal('2500'), 'method': 'cash', 'request_key': uuid.uuid4()}
+        self.act('payment', data, 'Приём')
         with self.assertRaises(Conflict): execute(self.order.pk, self.users['Приём'], 'payment', data, version)
         self.assertEqual(Payment.objects.count(), 1)
         with self.assertRaises(ValidationError): self.act('payment', {'amount': Decimal('1'), 'method': 'cash', 'request_key': uuid.uuid4()}, 'Приём')
