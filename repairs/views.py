@@ -37,6 +37,24 @@ def dashboard(request):
         'overdue_count': tasks.filter(due_date__lt=timezone.localdate()).count()})
 
 
+@staff_required
+@require_POST
+def create_backup(request):
+    if not has_role(request.user, ADMIN):
+        raise PermissionDenied
+    from io import StringIO
+    from pathlib import Path
+    import sqlite3
+    from django.core.management import call_command, CommandError
+    try:
+        target = call_command('backup_database', keep_existing=True, stdout=StringIO())
+    except (CommandError, OSError, sqlite3.Error):
+        messages.error(request, 'Не удалось создать резервную копию. Проверьте свободное место и права на папку backups, затем повторите попытку.')
+    else:
+        messages.success(request, f'Резервная копия создана и проверена: backups/{Path(target).name}')
+    return redirect('dashboard')
+
+
 def filtered_orders(request):
     orders = visible_orders(request.user)
     q = request.GET.get('q', '').strip()

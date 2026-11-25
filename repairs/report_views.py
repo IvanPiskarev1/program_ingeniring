@@ -35,6 +35,13 @@ def reports(request):
             rows += [[text_cell(m['user'].get_full_name() or m['user'].username), m['active'], m['overdue']] for m in data['masters']]
             rows += [[], ['Категория неисправности', 'Принято за период']]
             rows += [[text_cell(f['diagnosis__category__name']), f['total']] for f in data['faults']]
+            rows += [[], ['Оплаты по категориям неисправностей', 'Сумма, ₽']]
+            rows += [[text_cell(row['name']), str(row['amount'])] for row in data['fault_payments']]
+            rows += [[], ['Оплаты по назначенным мастерам', 'Сумма, ₽', 'Оплат', 'Заказов']]
+            rows += [[text_cell(row['name']), str(row['amount']), row['payment_count'], row['order_count']] for row in data['master_payments']]
+            rows += [[], ['Детали выданных за период заказов', 'Количество, шт.', 'Стоимость, ₽']]
+            rows += [[text_cell(row['name']), row['quantity'], str(row['amount'])] for row in data['used_parts']]
+            rows += [['Итого стоимость деталей, ₽', '', str(data['parts_total'])]]
             rows += [[], ['Номер', 'Изделие', 'Статус', 'Принято']]
             rows += [[o.number, text_cell(str(o.device)), o.get_status_display(), o.created_at.isoformat()] for o in data['orders']]
             if request.GET['format'] == 'csv':

@@ -170,8 +170,8 @@ class EmptyForm(forms.Form):
 
 
 class ReportForm(forms.Form):
-    start = forms.DateField(label='С', required=False, widget=forms.DateInput(attrs={'type': 'date'}))
-    end = forms.DateField(label='По', required=False, widget=forms.DateInput(attrs={'type': 'date'}))
+    start = forms.DateField(label='С', required=False, widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}))
+    end = forms.DateField(label='По', required=False, widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}))
     def clean(self):
         data = super().clean()
         if data.get('start') and data.get('end') and data['start'] > data['end']:

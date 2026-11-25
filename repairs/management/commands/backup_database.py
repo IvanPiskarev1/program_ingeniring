@@ -9,6 +9,7 @@ class Command(BaseCommand):
     help = 'Безопасная онлайн-копия SQLite; удаляет только свои копии старше 30 дней.'
     def add_arguments(self, parser):
         parser.add_argument('--output', default=str(settings.BASE_DIR / 'backups'))
+        parser.add_argument('--keep-existing', action='store_true', help='Не удалять прежние копии.')
     def handle(self, *args, **options):
         source = Path(settings.DATABASES['default']['NAME'])
         if not source.exists(): raise CommandError('База не найдена. Сначала migrate.')
@@ -20,6 +21,8 @@ class Command(BaseCommand):
             if dst.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
                 raise CommandError('Проверка целостности копии не прошла.')
         cutoff = datetime.now().timestamp() - timedelta(days=30).total_seconds()
-        for old in folder.glob('asui-*.sqlite3'):
-            if old.stat().st_mtime < cutoff: old.unlink()
+        if not options['keep_existing']:
+            for old in folder.glob('asui-*.sqlite3'):
+                if old.stat().st_mtime < cutoff: old.unlink()
         self.stdout.write(self.style.SUCCESS(f'Копия создана и проверена: {target}'))
+        return str(target)

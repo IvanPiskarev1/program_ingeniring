@@ -4,6 +4,7 @@ urlpatterns = [
     path('favicon.ico', views.favicon, name='favicon'),
     path('', views.home, name='home'),
     path('dashboard/', views.dashboard, name='dashboard'),
+    path('backups/create/', views.create_backup, name='create_backup'),
     path('orders/', views.order_list, name='orders'),
     path('orders/new/', views.order_new, name='intake'),
     path('orders/<int:pk>/', views.order_detail, name='order_detail'),

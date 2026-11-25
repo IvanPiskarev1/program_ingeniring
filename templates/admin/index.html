@@ -1,0 +1,11 @@
+{% extends "admin/index.html" %}
+{% block content %}
+{% if can_backup %}
+<div class="module" style="padding:16px;margin-bottom:24px">
+<h2>Резервная копия базы</h2>
+<p>Проверенная копия сохраняется в папку backups на компьютере сервера. Прежние копии сохраняются.</p>
+<form method="post" action="{% url 'create_backup' %}">{% csrf_token %}<button type="submit" class="button" style="min-height:44px">Создать резервную копию</button></form>
+</div>
+{% endif %}
+{{ block.super }}
+{% endblock %}

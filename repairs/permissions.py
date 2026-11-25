@@ -42,7 +42,7 @@ def visible_orders(user):
 
 def navigation(request):
     user = request.user
-    return {'can_receive': has_role(user, RECEPTION), 'can_manage': has_role(user, MANAGER),
+    return {'can_backup': has_role(user, ADMIN), 'can_receive': has_role(user, RECEPTION), 'can_manage': has_role(user, MANAGER),
             'can_quality': has_role(user, QUALITY), 'can_master': has_role(user, MASTER),
             'can_directory': has_role(user, RECEPTION, MANAGER, ADMIN),
             'is_employee': has_role(user, *ROLES), 'role_names': ', '.join(user.groups.values_list('name', flat=True)) if user.is_authenticated else ''}
