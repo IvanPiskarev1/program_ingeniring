@@ -157,6 +157,8 @@ def main():
                          server_class=PreviewServer, handler_class=PrivateLog) as server:
             port = server.server_port
             configure_environment(ip, port)
+            from mail_launcher import load_mail_environment, mail_worker
+            load_mail_environment(ROOT / '.env')
             from django.core.wsgi import get_wsgi_application
             from django.contrib.staticfiles.handlers import StaticFilesHandler
             server.set_app(StaticFilesHandler(get_wsgi_application()))
@@ -172,7 +174,8 @@ def main():
             print('QR-ссылки: ' + os.environ['ASUI_PUBLIC_URL'], flush=True)
             print('Телефон должен быть в той же сети. Остановка: Ctrl+C. Не открывайте порт на роутере.', flush=True)
             print('HTTP без шифрования; используйте только доверенную сеть. Это не сервер для Интернета.', flush=True)
-            server.serve_forever()
+            with mail_worker(ROOT):
+                server.serve_forever()
     except (OSError, RuntimeError, ValueError) as error:
         parser.exit(1, str(error) + '\n')
     except KeyboardInterrupt:

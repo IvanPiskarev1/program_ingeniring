@@ -151,9 +151,6 @@ def order_context(request, order):
     if has_role(user, QUALITY) and order.status == 'quality': actions.append(('quality', 'Провести контроль качества'))
     if has_role(user, RECEPTION) and order.status == 'ready':
         actions.extend([('payment', 'Зарегистрировать оплату'), ('issue', 'Выдать устройство')])
-    from .models import Diagnosis
-    if has_role(user, RECEPTION, MANAGER) and Diagnosis.objects.filter(order=order).exists() and order.status != 'issued':
-        actions.insert(0, ('approve_estimate', 'Зафиксировать согласование цены'))
     return {'order': order, 'actions': actions, 'history': order.history.select_related('author'),
         'checks': order.checks.select_related('author'), 'notifications': order.history.select_related('notification'),
         'audit': order.auditevent_set.select_related('actor')[:20]}
