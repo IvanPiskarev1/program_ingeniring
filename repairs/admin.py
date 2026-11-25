@@ -11,7 +11,7 @@ class ReadOnlyAdmin(admin.ModelAdmin):
 
 
 for model in (models.RepairOrder, models.Diagnosis, models.RepairWork, models.UsedPart, models.QualityCheck,
-              models.StatusHistory, models.Notification, models.Payment, models.AuditEvent):
+              models.StatusHistory, models.Notification, models.Payment, models.AuditEvent, models.EstimateRevision):
     admin.site.register(model, ReadOnlyAdmin)
 
 
@@ -29,7 +29,7 @@ class DeviceAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None): return False
 
 
-admin.site.register([models.DeviceType, models.FaultCategory, models.NotificationTemplate, models.PriceItem])
+admin.site.register([models.DeviceType, models.FaultCategory, models.NotificationTemplate, models.PriceItem, models.DeviceCatalogItem, models.WorkCatalogItem])
 
 
 admin.site.unregister(User)

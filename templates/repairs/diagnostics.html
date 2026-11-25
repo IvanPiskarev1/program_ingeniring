@@ -1,0 +1,26 @@
+{% extends 'base.html' %}{% load static %}
+{% block title %}Диагностика · АСУИ{% endblock %}
+{% block content %}
+<div class="page-head"><div><a class="back" href="{% url 'order_detail' order.pk %}">← К заказу</a><h1>Диагностика</h1><p>{{ order.number }} · {{ order.device }}</p></div></div>
+<form method="post" class="form-card" id="diagnostics-form" data-model-id="{{ catalog_model_id }}">{% csrf_token %}
+<input type="hidden" name="version" value="{{ version }}">
+{{ form.as_p }}
+<p id="estimate-summary" role="status">Предварительная сумма рассчитывается из позиций; без позиций укажите оценку вручную.</p>
+<h2>Детали и работы</h2>
+<p>Выберите позицию из справочника или введите название и цену вручную. Изменение названия или цены снимает привязку к справочнику.</p>
+{{ formset.management_form }}{{ formset.non_form_errors }}
+<div id="diagnostic-rows">
+{% for row in formset %}{% include 'repairs/diagnostic_row.html' %}{% endfor %}
+</div>
+<button class="button secondary" name="add_manual" value="1" type="submit" formnovalidate id="add-row">Добавить позицию</button>
+<p role="status" id="diagnostic-status"></p>
+<div class="form-actions"><button class="button" name="save" value="1">Сохранить диагностику и начать ремонт</button><a class="button secondary" href="{% url 'order_detail' order.pk %}">Отмена</a></div>
+</form>
+<template id="diagnostic-empty">{% with row=formset.empty_form %}{% include 'repairs/diagnostic_row.html' %}{% endwith %}</template>
+<details{% if search_q %} open{% endif %}><summary>Поиск с добавлением по одной позиции</summary>
+<div class="filter-bar"><label>Тип<select name="kind" form="diagnostics-form"><option value="part">Деталь</option><option value="work" {% if search_kind == 'work' %}selected{% endif %}>Работа</option></select></label><label for="diagnostic-query">Название или артикул<input id="diagnostic-query" name="q" form="diagnostics-form" value="{{ search_q }}"></label><button class="button secondary" form="diagnostics-form" name="lookup" value="1" formnovalidate>Найти</button></div>
+{% for item in search_results %}<p><button class="button secondary" type="submit" form="diagnostics-form" formnovalidate name="add_catalog" value="{{ search_kind }}:{{ item.pk }}">Добавить: {{ item.name }} · {{ item.price }} ₽</button></p>{% empty %}{% if search_q %}<p>Позиции не найдены.</p>{% endif %}{% endfor %}
+</details>
+{{ catalog_choices|json_script:'diagnostic-catalog' }}
+<script src="{% static 'js/diagnostics.js' %}" defer></script>
+{% endblock %}

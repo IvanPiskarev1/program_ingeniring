@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views, public, report_views
+from . import views, public, report_views, catalog_api
 urlpatterns = [
     path('favicon.ico', views.favicon, name='favicon'),
     path('', views.home, name='home'),
@@ -8,6 +8,8 @@ urlpatterns = [
     path('orders/new/', views.order_new, name='intake'),
     path('orders/<int:pk>/', views.order_detail, name='order_detail'),
     path('orders/<int:pk>/action/<str:action>/', views.order_action, name='order_action'),
+    path('orders/<int:pk>/diagnostics/', views.order_action, {'action': 'diagnosis'}, name='diagnostics'),
+    path('api/works/search/', catalog_api.works_search, name='works_search'),
     path('orders/<int:pk>/print/', public.print_order, name='print_order'),
     path('orders/<int:pk>/print/intake/', public.print_order, {'document': 'intake'}, name='print_intake'),
     path('orders/<int:pk>/print/issue/', public.print_order, {'document': 'issue'}, name='print_issue'),
@@ -20,6 +22,11 @@ urlpatterns = [
     path('reports/', report_views.reports, name='reports'),
     path('track/', public.track, name='track'),
     path('track/<str:token>/', public.status_page, name='public_status'),
+    path('api/device-models/', catalog_api.device_models, name='device_models'),
+    path('api/clients/search/', catalog_api.client_search, name='client_search'),
+    path('api/clients/<int:pk>/', catalog_api.client_info, name='client_info'),
+    path('api/clients/<int:pk>/devices/', catalog_api.devices, name='client_devices'),
+    path('api/parts/search/', catalog_api.parts_search, name='parts_search'),
     path('api/orders/', public.order_api, name='orders_api'),
     path('api/orders/<int:pk>/', public.order_api, name='order_api'),
     path('api/public/status/<str:token>/', public.status_api, name='public_api'),

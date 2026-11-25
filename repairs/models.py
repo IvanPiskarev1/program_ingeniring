@@ -74,12 +74,52 @@ class PriceItem(models.Model):
     name = models.CharField('Название', max_length=180, unique=True)
     price = models.DecimalField('Цена, ₽', max_digits=12, decimal_places=2, validators=[MinValueValidator(0)])
     is_active = models.BooleanField('Действует', default=True)
+    sku = models.CharField('Артикул', max_length=64, unique=True, null=True, blank=True)
+    category = models.CharField('Категория техники', max_length=40, blank=True, db_index=True)
+    group = models.CharField('Группа деталей', max_length=80, blank=True, db_index=True)
+    unit = models.CharField('Единица измерения', max_length=16, default='шт.')
+    compatible_works = models.ManyToManyField('WorkCatalogItem', blank=True, related_name='compatible_parts', verbose_name='Работы с деталью')
     class Meta:
         verbose_name = 'позиция прайс-листа'
         verbose_name_plural = 'Прайс-лист'
         ordering = ['kind', 'name']
     def __str__(self):
         return f'{self.get_kind_display()}: {self.name} - {self.price} ₽'
+
+
+class WorkCatalogItem(models.Model):
+    name = models.CharField('Название', max_length=180)
+    category = models.ForeignKey(FaultCategory, on_delete=models.PROTECT, verbose_name='Категория')
+    price = models.DecimalField('Цена, ₽', max_digits=12, decimal_places=2, validators=[MinValueValidator(0)])
+    is_active = models.BooleanField('Действует', default=True)
+
+    class Meta:
+        ordering = ['name', 'pk']
+        verbose_name = 'работа справочника'
+        verbose_name_plural = 'Справочник работ'
+        constraints = [models.UniqueConstraint(fields=['name', 'category'], name='work_catalog_name_category'),
+                       models.CheckConstraint(condition=models.Q(price__gte=0), name='work_catalog_price_nonnegative')]
+
+    def __str__(self):
+        return self.name
+
+
+class DeviceCatalogItem(models.Model):
+    kind = models.ForeignKey(DeviceType, on_delete=models.PROTECT, verbose_name='Тип техники')
+    manufacturer = models.CharField('Производитель', max_length=100)
+    model = models.CharField('Модель', max_length=120)
+    category = models.CharField('Категория', max_length=40)
+    parts = models.ManyToManyField(PriceItem, blank=True, related_name='device_models', verbose_name='Детали')
+    works = models.ManyToManyField(WorkCatalogItem, blank=True, related_name='device_models', verbose_name='Работы')
+
+    class Meta:
+        ordering = ['manufacturer', 'model', 'pk']
+        constraints = [models.UniqueConstraint(fields=['kind', 'manufacturer', 'model'], name='device_catalog_model_unique')]
+        verbose_name = 'модель техники'
+        verbose_name_plural = 'Модели техники'
+
+    def __str__(self):
+        return f'{self.manufacturer} {self.model}'
 
 
 class IntakeRequest(models.Model):
@@ -108,7 +148,11 @@ class RepairOrder(models.Model):
     issued_at = models.DateTimeField(null=True, blank=True)
     issued_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name='+')
     issue_method = models.CharField(max_length=160, blank=True)
-    estimate = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)])
+    estimate = models.DecimalField('Первоначальная оценка, ₽', max_digits=12, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)])
+    approved_estimate = models.DecimalField('Согласованная стоимость, ₽', max_digits=12, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)])
+    estimate_approved_at = models.DateTimeField('Дата согласования стоимости', null=True, blank=True)
+    estimate_approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name='approved_estimates')
+    estimate_approval_note = models.CharField('Комментарий к согласованию', max_length=240, blank=True)
     free_reason = models.CharField(max_length=240, blank=True)
     token = models.CharField(max_length=64, unique=True, default=access_token, editable=False)
     request_key = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
@@ -132,6 +176,12 @@ class RepairOrder(models.Model):
     def balance(self):
         return self.final_total - self.paid_total
     @property
+    def preliminary_total(self):
+        return self.final_total if hasattr(self, 'diagnosis') else (self.estimate or Decimal('0.00'))
+    @property
+    def estimate_overrun(self):
+        return bool(self.estimate is not None and self.preliminary_total > self.estimate)
+    @property
     def overdue(self):
         return bool(self.due_date and self.due_date < timezone.localdate() and self.status != self.Status.ISSUED)
     def __str__(self):
@@ -148,9 +198,22 @@ class Diagnosis(models.Model):
     created_at = models.DateTimeField(default=timezone.now)
 
 
+class EstimateRevision(models.Model):
+    order = models.ForeignKey(RepairOrder, on_delete=models.PROTECT, related_name='estimate_revisions')
+    amount = models.DecimalField('Предварительная стоимость, ₽', max_digits=12, decimal_places=2, validators=[MinValueValidator(0)])
+    reason = models.CharField('Причина изменения', max_length=240)
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(default=timezone.now)
+    class Meta:
+        ordering = ['created_at', 'pk']
+        verbose_name = 'изменение сметы'
+        verbose_name_plural = 'История сметы'
+
+
 class RepairWork(models.Model):
     order = models.ForeignKey(RepairOrder, on_delete=models.PROTECT, related_name='works')
     description = models.CharField('Выполненная работа', max_length=240)
+    quantity = models.PositiveIntegerField('Количество', default=1, validators=[MinValueValidator(1)])
     minutes = models.PositiveIntegerField('Трудозатраты, мин', default=0)
     cost = models.DecimalField('Стоимость работы, ₽', max_digits=12, decimal_places=2, validators=[MinValueValidator(0)])
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)

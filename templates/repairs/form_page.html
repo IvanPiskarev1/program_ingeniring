@@ -1,1 +1,27 @@
-{% extends 'base.html' %}{% block title %}{{ title }} · АСУИ{% endblock %}{% block content %}<div class="page-head"><div><a class="back" href="{% if order %}{% url 'order_detail' order.pk %}{% else %}{% url 'orders' %}{% endif %}">← К заказам</a><h1>{{ title }}</h1><p>{{ subtitle }}</p></div></div><form class="form-card" method="post">{% csrf_token %}{% if order %}<input type="hidden" name="version" value="{{ version }}">{% endif %}{{ form.non_field_errors }}{% for hidden in form.hidden_fields %}{{ hidden }}{{ hidden.errors }}{% endfor %}{% for field in form.visible_fields %}{% if field.name == 'existing_client' %}<h2>01. Клиент</h2><p class="muted">Выберите запись либо заполните сведения нового клиента.</p>{% elif field.name == 'existing_device' %}<h2>02. Изделие</h2><p class="muted">Для повторного обращения выберите изделие из списка - история сохранится.</p>{% elif field.name == 'problem' %}<h2>03. Обращение</h2>{% endif %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span class="muted">*</span>{% endif %}</label>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{{ field.errors }}</div>{% endfor %}{% if not form.visible_fields %}<p>Подтвердите переход. В истории сохранятся этап, время и сотрудник.</p>{% endif %}<div class="form-actions"><button class="button" type="submit">{{ button }}</button><a class="quiet" href="{% if order %}{% url 'order_detail' order.pk %}{% else %}{% url 'orders' %}{% endif %}">Отмена</a></div></form>{% endblock %}
+{% extends 'base.html' %}{% load static %}
+{% block title %}{{ title }} · АСУИ{% endblock %}
+{% block content %}
+<div class="page-head"><div><a class="back" href="{% if order %}{% url 'order_detail' order.pk %}{% else %}{% url 'orders' %}{% endif %}">← К заказам</a><h1>{{ title }}</h1><p>{{ subtitle }}</p></div></div>
+{% if is_part %}
+<form class="filter-bar" method="get"><label for="part-query">Поиск детали по названию или артикулу</label><input id="part-query" type="search" name="part_q" value="{{ request.GET.part_q }}" autocomplete="off"><button class="button secondary">Найти деталь</button></form>
+<div id="part-results" aria-live="polite">{% for item in part_results %}<form method="post">{% csrf_token %}<input type="hidden" name="version" value="{{ version }}"><input type="hidden" name="price_item" value="{{ item.pk }}"><input type="hidden" name="quantity" value="1"><button class="button secondary">Добавить: {{ item.sku }} · {{ item.name }} · {{ item.price }} ₽</button></form>{% endfor %}</div>
+{% endif %}
+<form class="form-card" method="post" id="order-form" data-intake="{{ is_intake|yesno:'1,0' }}" data-part="{{ is_part|yesno:'1,0' }}" data-work="{{ is_work|yesno:'1,0' }}">{% csrf_token %}
+{% if order %}<input type="hidden" name="version" value="{{ version }}">{% endif %}
+{% if is_intake %}<input type="hidden" name="client_loaded" id="client-loaded" value="{{ client_loaded|yesno:'1,' }}">{% endif %}
+{{ form.non_field_errors }}{% for hidden in form.hidden_fields %}{{ hidden }}{{ hidden.errors }}{% endfor %}
+{% for field in form.visible_fields %}
+{% if field.name == 'existing_client' %}<h2>01. Клиент</h2>
+<div class="field" id="client-search-box" hidden><label for="client-query">Поиск по ФИО, телефону или почте</label><input id="client-query" type="search" autocomplete="off" placeholder="Не менее 2 символов"><div id="client-results" aria-live="polite"></div><button type="button" class="button secondary" id="new-client">Новый клиент</button></div>
+{% elif field.name == 'existing_device' %}<h2>02. Изделие</h2>
+{% elif field.name == 'problem' %}<h2>03. Обращение</h2>{% endif %}
+<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span class="muted">*</span>{% endif %}</label>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{{ field.errors }}</div>
+{% if field.name == 'price_item' %}<button class="button secondary" type="submit" name="load_catalog" value="1" formnovalidate>Загрузить выбранную позицию</button>{% endif %}
+{% if field.name == 'existing_client' or field.name == 'existing_device' or field.name == 'catalog_model' %}<button class="button secondary" type="submit" name="load_existing" value="{{ field.name }}" formnovalidate>Загрузить выбранные данные</button>{% endif %}
+{% endfor %}
+{% if not form.visible_fields %}<p>Подтвердите переход. В истории сохранятся этап, время и сотрудник.</p>{% endif %}
+<p id="lookup-status" role="status"></p>
+<div class="form-actions"><button class="button" type="submit">{{ button }}</button><a class="quiet" href="{% if order %}{% url 'order_detail' order.pk %}{% else %}{% url 'orders' %}{% endif %}">Отмена</a></div></form>
+{{ catalog_choices|json_script:'catalog-choices' }}
+<script src="{% static 'js/intake.js' %}" defer></script>
+{% endblock %}

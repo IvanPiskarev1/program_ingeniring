@@ -18,7 +18,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from . import forms
-from .models import AuditEvent, Client, Device, PriceItem, RepairOrder
+from .models import AuditEvent, Client, Device, PriceItem, RepairOrder, WorkCatalogItem
 from .permissions import ADMIN, MANAGER, MASTER, QUALITY, RECEPTION, has_role, staff_required, visible_orders
 from .services.orders import Conflict, event, execute
 
@@ -73,8 +73,37 @@ def order_list(request):
 def order_new(request):
     if not has_role(request.user, RECEPTION):
         raise PermissionDenied
-    form = forms.IntakeForm(request.POST or None)
-    if request.method == 'POST' and form.is_valid():
+    if request.method == 'POST' and not request.POST.get('load_existing'):
+        try:
+            key = uuid.UUID(request.POST.get('request_key', ''))
+        except (ValueError, TypeError, AttributeError):
+            key = None
+        if key:
+            old = RepairOrder.objects.filter(request_key=key).first()
+            if old:
+                return redirect('order_detail', pk=old.pk)
+    payload = request.POST.copy() if request.method == 'POST' else None
+    if payload is not None and payload.get('load_existing'):
+        from .intake_data import client_fields, client_devices, device_fields
+        client = Client.objects.filter(pk=payload.get('existing_client')).first() if payload.get('existing_client', '').isdigit() else None
+        if client:
+            if payload.get('load_existing') == 'existing_client':
+                payload.update({k: v for k, v in client_fields(client).items() if k != 'id'})
+                payload['email_notifications'] = 'on' if client.email_notifications else ''
+                payload['client_loaded'] = '1'
+            device = client_devices(client).filter(pk=payload.get('existing_device')).first() if payload.get('existing_device', '').isdigit() else None
+            if device and payload.get('load_existing') != 'catalog_model':
+                payload.update({k: v for k, v in device_fields(device, client).items() if k not in ('id', 'label')})
+        if payload.get('load_existing') == 'catalog_model':
+            from .models import DeviceCatalogItem
+            catalog = DeviceCatalogItem.objects.filter(pk=payload.get('catalog_model')).first() if payload.get('catalog_model', '').isdigit() else None
+            if catalog:
+                payload.update(device_type=str(catalog.kind_id), manufacturer=catalog.manufacturer, device_model=catalog.model, existing_device='', serial='')
+        form = forms.IntakeForm(initial=payload.dict())
+        form.fields['existing_device'].queryset = client_devices(client) if client else Device.objects.none()
+    else:
+        form = forms.IntakeForm(payload)
+    if request.method == 'POST' and not request.POST.get('load_existing') and form.is_valid():
         data = form.cleaned_data
         with transaction.atomic():
             from .models import IntakeRequest
@@ -82,14 +111,32 @@ def order_new(request):
             old = RepairOrder.objects.filter(request_key=data['request_key']).first()
             if old:
                 return redirect('order_detail', pk=old.pk)
-            client = data['existing_client'] or Client.objects.create(kind=data['kind'], name=data['client_name'], contact=data['contact'], phone=data['phone'], email=data['email'], email_notifications=data['email_notifications'])
-            device = data['existing_device'] or Device.objects.create(kind=data['device_type'], manufacturer=data['manufacturer'], model=data['device_model'], serial=data['serial'])
+            client = data['existing_client']
+            if client:
+                for field, attr in [('client_name', 'name'), ('kind', 'kind'), ('contact', 'contact'), ('phone', 'phone'), ('email', 'email')]:
+                    if field in request.POST:
+                        setattr(client, attr, data[field])
+                if request.POST.get('client_loaded'):
+                    client.email_notifications = data['email_notifications']
+                client.save()
+            else:
+                client = Client.objects.create(kind=data['kind'], name=data['client_name'], contact=data['contact'], phone=data['phone'], email=data['email'], email_notifications=data['email_notifications'])
+            device = data['existing_device']
+            if device:
+                if not device.orders.filter(client=client).exists():
+                    raise PermissionDenied
+                for field, attr in [('device_type', 'kind'), ('manufacturer', 'manufacturer'), ('device_model', 'model'), ('serial', 'serial')]:
+                    if field in request.POST and (data.get(field) or field == 'serial'):
+                        setattr(device, attr, data[field])
+                device.save()
+            else:
+                device = Device.objects.create(kind=data['device_type'], manufacturer=data['manufacturer'], model=data['device_model'], serial=data['serial'])
             order = RepairOrder.objects.create(client=client, device=device, problem=data['problem'], accessories=data['accessories'], appearance=data['appearance'], request_key=data['request_key'])
             event(order, request.user)
             AuditEvent.objects.create(actor=request.user, order=order, action='Создан заказ')
         messages.success(request, f'Заказ {order.number} принят. Клиентская ссылка доступна в карточке.')
         return redirect('order_detail', pk=order.pk)
-    return render(request, 'repairs/form_page.html', {'form': form, 'title': 'Приём устройства', 'subtitle': 'Новый заказ или повторное обращение с сохранением истории.', 'button': 'Принять устройство'})
+    return render(request, 'repairs/form_page.html', {'form': form, 'title': 'Приём устройства', 'subtitle': 'Новый заказ или повторное обращение с сохранением истории.', 'button': 'Принять устройство', 'is_intake': True, 'client_loaded': bool(payload and payload.get('client_loaded'))})
 
 
 def order_context(request, order):
@@ -104,6 +151,9 @@ def order_context(request, order):
     if has_role(user, QUALITY) and order.status == 'quality': actions.append(('quality', 'Провести контроль качества'))
     if has_role(user, RECEPTION) and order.status == 'ready':
         actions.extend([('payment', 'Зарегистрировать оплату'), ('issue', 'Выдать устройство')])
+    from .models import Diagnosis
+    if has_role(user, RECEPTION, MANAGER) and Diagnosis.objects.filter(order=order).exists() and order.status != 'issued':
+        actions.insert(0, ('approve_estimate', 'Зафиксировать согласование цены'))
     return {'order': order, 'actions': actions, 'history': order.history.select_related('author'),
         'checks': order.checks.select_related('author'), 'notifications': order.history.select_related('notification'),
         'audit': order.auditevent_set.select_related('actor')[:20]}
@@ -117,21 +167,48 @@ def order_detail(request, pk):
 
 ACTION_FORMS = {'assign': forms.AssignForm, 'start': forms.EmptyForm, 'diagnosis': forms.DiagnosisForm,
     'work': forms.WorkForm, 'part': forms.PartForm, 'to_quality': forms.EmptyForm, 'quality': forms.QualityForm,
-    'payment': forms.PaymentForm, 'issue': forms.IssueForm}
+    'payment': forms.PaymentForm, 'issue': forms.IssueForm, 'approve_estimate': forms.EstimateApprovalForm}
 ACTION_TITLES = {'assign': 'Назначить мастера', 'start': 'Начать диагностику', 'diagnosis': 'Диагностика',
     'work': 'Добавить работу', 'part': 'Добавить деталь', 'to_quality': 'Передать на контроль', 'quality': 'Контроль качества',
-    'payment': 'Зарегистрировать оплату', 'issue': 'Выдача устройства'}
+    'payment': 'Зарегистрировать оплату', 'issue': 'Выдача устройства', 'approve_estimate': 'Согласование стоимости'}
 
 
 @staff_required
 def order_action(request, pk, action):
+    if action == 'diagnosis' and not has_role(request.user, MASTER):
+        raise PermissionDenied
     order = get_object_or_404(visible_orders(request.user), pk=pk)
+    if action == 'diagnosis' and request.method == 'POST' and has_role(request.user, MASTER) and order.master_id == request.user.pk and order.status != 'diagnosis':
+        return HttpResponse('Диагностика уже сохранена или этап изменён. Обновите карточку заказа.', status=409)
     if action not in dict(order_context(request, order)['actions']):
         raise PermissionDenied('Действие недоступно для вашей роли или текущего этапа.')
-    initial = {'amount': max(order.balance, 0), 'estimate': order.estimate, 'due_date': order.due_date, 'diagnosis_price': Decimal('500')}
-    form = ACTION_FORMS[action](request.POST or None, initial=initial)
+    if action == 'diagnosis':
+        from .diagnostics import diagnosis_page
+        return diagnosis_page(request, order)
+    initial = {'amount': order.preliminary_total if action == 'approve_estimate' else max(order.balance, 0), 'estimate': order.estimate, 'due_date': order.due_date, 'diagnosis_price': Decimal('500')}
+    payload = request.POST.copy() if request.method == 'POST' else None
+    loading = bool(payload is not None and payload.get('load_catalog') and action in ('work', 'part'))
+    if loading:
+        model = WorkCatalogItem if action == 'work' else PriceItem
+        item_id = payload.get('price_item', '')
+        query = model.objects.filter(is_active=True)
+        if action == 'part':
+            query = query.filter(kind='part')
+        item = query.filter(pk=item_id).first() if item_id.isdigit() else None
+        if item:
+            payload['description' if action == 'work' else 'name'] = item.name
+            payload['cost' if action == 'work' else 'price'] = str(item.price)
+    form = ACTION_FORMS[action](payload, initial=initial)
+    catalog_choices = []
+    if action in ('work', 'part'):
+        catalog_choices = [{'id': item.pk, 'name': item.name, 'price': str(item.price)} for item in form.fields['price_item'].queryset]
+    part_results = []
+    if action == 'part':
+        from .catalog_api import price_query
+        if len(request.GET.get('part_q', '').strip()) >= 2:
+            part_results = price_query({'q': request.GET['part_q'], 'kind': 'part'})[:10]
     status = 200
-    if request.method == 'POST' and form.is_valid():
+    if request.method == 'POST' and not loading and form.is_valid():
         try:
             raw_version = request.POST.get('version', '')
             if not raw_version.isascii() or not raw_version.isdigit() or len(raw_version) > 10:
@@ -150,20 +227,36 @@ def order_action(request, pk, action):
                 return redirect('orders')
             return redirect('order_detail', pk=pk)
     return render(request, 'repairs/form_page.html', {'form': form, 'title': ACTION_TITLES[action], 'subtitle': f'{order.number} · {order.device}',
-        'button': ACTION_TITLES[action], 'order': order, 'version': request.POST.get('version', order.version), 'is_payment': action == 'payment'}, status=status)
+        'button': ACTION_TITLES[action], 'order': order, 'version': request.POST.get('version', order.version), 'is_payment': action == 'payment', 'is_part': action == 'part', 'is_work': action == 'work', 'catalog_choices': catalog_choices, 'part_results': part_results}, status=status)
 
 
 @staff_required
 def price_list(request):
     if not has_role(request.user, RECEPTION, MASTER, MANAGER, ADMIN): raise PermissionDenied
-    items = PriceItem.objects.all()
-    q = request.GET.get('q', '').strip()
-    if q:
-        items = items.filter(name__icontains=q)
-    kind = request.GET.get('kind', '')
-    if kind in dict(PriceItem.KIND):
-        items = items.filter(kind=kind)
-    return render(request, 'repairs/price_list.html', {'items': items, 'query': q, 'kind': kind, 'kinds': PriceItem.KIND})
+    from .catalog_api import price_query
+    from .models import DeviceCatalogItem
+    items = list(price_query(request.GET).exclude(kind='work').prefetch_related('compatible_works'))
+    works = WorkCatalogItem.objects.filter(is_active=True)
+    q = request.GET.get('q', '').strip().casefold()
+    if request.GET.get('model_id'):
+        works = works.filter(device_models__pk=request.GET['model_id']) if request.GET['model_id'].isdigit() else works.none()
+    if request.GET.get('category'):
+        works = works.filter(device_models__category=request.GET['category']).distinct()
+    if request.GET.get('kind') not in ('', 'work', None) or request.GET.get('group'):
+        works = works.none()
+    items += [{'name': w.name, 'price': w.price, 'get_kind_display': 'Работа', 'unit': 'усл.', 'sku': '', 'group': w.category.name}
+              for w in works.select_related('category') if not q or q in w.name.casefold()]
+    params = request.GET.copy()
+    params.pop('page', None)
+    return render(request, 'repairs/price_list.html', {
+        'page_obj': Paginator(items, 50).get_page(request.GET.get('page')),
+        'query': request.GET.get('q', ''), 'kind': request.GET.get('kind', ''),
+        'category': request.GET.get('category', ''), 'group': request.GET.get('group', ''),
+        'device_models': DeviceCatalogItem.objects.all(), 'model_id': request.GET.get('model_id', ''),
+        'model_works': WorkCatalogItem.objects.filter(is_active=True, device_models__pk=request.GET['model_id']) if request.GET.get('model_id', '').isdigit() else [],
+        'groups': PriceItem.objects.exclude(group='').values_list('group', flat=True).distinct().order_by('group'),
+        'kinds': PriceItem.KIND, 'params': params.urlencode(),
+        'categories': [('phone', 'Телефоны'), ('laptop', 'Ноутбуки'), ('appliance', 'Бытовая техника')]})
 
 
 @staff_required

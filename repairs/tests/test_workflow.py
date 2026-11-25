@@ -7,7 +7,7 @@ from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
-from repairs.models import Client, Device, DeviceType, FaultCategory, Payment, RepairOrder, RepairWork
+from repairs.models import Client, Device, DeviceType, EstimateRevision, FaultCategory, Payment, RepairOrder, RepairWork
 from repairs.services.orders import Conflict, event, execute
 
 
@@ -53,6 +53,8 @@ class WorkflowTests(WorkflowFixture):
         self.act('to_quality')
         self.act('quality', {'passed': True, 'comment': 'Повторный тест пройден'}, 'Контроль качества')
         self.assertEqual(self.order.final_total, Decimal('2500'))
+        self.assertEqual(self.order.estimate_revisions.count(), 4)
+        self.assertFalse(self.order.estimate_overrun)
         with self.assertRaises(ValidationError): self.act('issue', {'free_reason': '', 'issue_method': 'Лично'}, 'Приём')
         self.act('payment', {'amount': Decimal('2500'), 'method': 'cash', 'request_key': uuid.uuid4()}, 'Приём')
         self.act('issue', {'free_reason': '', 'issue_method': 'Лично'}, 'Приём')
@@ -61,6 +63,17 @@ class WorkflowTests(WorkflowFixture):
         self.assertEqual(self.order.history.count(), 8)
         self.assertEqual(self.order.history.filter(notification__isnull=False).count(), 8)
         self.assertIsNotNone(self.order.issued_at)
+    def test_estimate_can_be_approved_only_at_current_total_or_higher(self):
+        self.repair()
+        self.client.force_login(self.users['Приём'])
+        response = self.client.post(reverse('order_action', args=[self.order.pk, 'approve_estimate']), {'amount': '2400', 'note': 'Согласовано по телефону', 'version': self.order.version})
+        self.assertEqual(response.status_code, 400)
+        self.order.refresh_from_db()
+        self.assertIsNone(self.order.approved_estimate)
+        self.order = execute(self.order.pk, self.users['Приём'], 'approve_estimate', {'amount': Decimal('2600'), 'note': 'Клиент согласовал'}, self.order.version)
+        self.assertEqual(self.order.approved_estimate, Decimal('2600'))
+        self.assertEqual(self.order.estimate_approved_by, self.users['Приём'])
+
     def test_stale_work_is_rejected_without_duplicate(self):
         self.repair()
         version = self.order.version

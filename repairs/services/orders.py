@@ -3,7 +3,7 @@ from django.core.exceptions import ValidationError, PermissionDenied
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
-from ..models import AuditEvent, Diagnosis, Notification, NotificationTemplate, Payment, QualityCheck, RepairOrder, StatusHistory
+from ..models import AuditEvent, Diagnosis, EstimateRevision, Notification, NotificationTemplate, Payment, QualityCheck, RepairOrder, StatusHistory
 from ..permissions import MANAGER, MASTER, QUALITY, RECEPTION, has_role
 
 
@@ -58,17 +58,54 @@ def execute(order_id, actor, action, data, version):
         order.status = S.DIAGNOSIS
     elif action == 'diagnosis':
         expect(order, S.DIAGNOSIS)
-        diag_price = data.get('diagnosis_price') or Decimal('500')
-        Diagnosis.objects.create(order=order, author=actor, result=data['result'], category=data['category'], required_parts=data['required_parts'], price=diag_price)
-        order.estimate = data['estimate'] + diag_price
+        diag_price = data.get('diagnosis_price')
+        if diag_price is None:
+            diag_price = Decimal('500')
+        from ..diagnostic_items import validate_items
+        from ..models import RepairWork, UsedPart
+        rows = validate_items(data.get('items', []))
+        if diag_price < 0 or data['estimate'] < 0:
+            raise ValidationError('Стоимость не может быть отрицательной.')
+        Diagnosis.objects.create(order=order, author=actor, result=data['result'], category=data['category'], required_parts=data.get('required_parts', ''), price=diag_price)
+        for row in rows:
+            if row['kind'] == 'part':
+                UsedPart.objects.create(order=order, name=row['name'], quantity=row['quantity'], price=row['price'])
+            else:
+                RepairWork.objects.create(order=order, author=actor, description=row['name'], quantity=row['quantity'], cost=row['price'] * row['quantity'])
+        order.due_date = data.get('due_date')
+        order.estimate = (sum((row['price'] * row['quantity'] for row in rows), Decimal('0')) if rows else data['estimate']) + diag_price
+        EstimateRevision.objects.create(order=order, amount=order.estimate, reason='Первоначальная оценка после диагностики', author=actor)
         order.status = S.REPAIR
+    elif action == 'approve_estimate':
+        require(actor, RECEPTION, MANAGER)
+        if not hasattr(order, 'diagnosis') or order.status == S.ISSUED:
+            raise ValidationError('Согласование доступно после диагностики и до выдачи.')
+        amount = data['amount']
+        if amount < order.preliminary_total:
+            raise ValidationError('Согласованная сумма не может быть меньше текущей предварительной стоимости.')
+        order.approved_estimate = amount
+        order.estimate_approved_at = timezone.now()
+        order.estimate_approved_by = actor
+        order.estimate_approval_note = data.get('note', '').strip()
+        audit(order, actor, f'Согласована стоимость: {amount} ₽')
     elif action in ('work', 'part'):
         expect(order, S.REPAIR)
-        from ..models import RepairWork, UsedPart
+        from ..models import RepairWork, UsedPart, PriceItem, WorkCatalogItem
+        data = dict(data)
+        if data.get('price_item'):
+            catalog = PriceItem.objects.filter(kind='part') if action == 'part' else WorkCatalogItem.objects.all()
+            item = catalog.filter(pk=data['price_item'].pk, is_active=True).first()
+            if not item:
+                raise ValidationError('Позиция прайс-листа недоступна.')
+            data['name' if action == 'part' else 'description'] = item.name
+            data['price' if action == 'part' else 'cost'] = item.price
         if action == 'work':
             RepairWork.objects.create(order=order, author=actor, description=data['description'], minutes=data['minutes'], cost=data['cost'])
+            revision_reason = f"Добавлена работа: {data['description']}"
         else:
             UsedPart.objects.create(order=order, name=data['name'], quantity=data['quantity'], price=data['price'])
+            revision_reason = f"Добавлена деталь: {data['name']}"
+        EstimateRevision.objects.create(order=order, amount=order.final_total, reason=revision_reason, author=actor)
         audit(order, actor, 'Добавлена работа' if action == 'work' else 'Добавлена деталь')
     elif action == 'to_quality':
         expect(order, S.REPAIR)

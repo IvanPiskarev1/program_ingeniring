@@ -15,15 +15,17 @@ class Command(BaseCommand):
     help = 'Неизменяющая проверка страниц на существующей БД и восстановления её копии. Не заменяет браузер.'
     def handle(self, *args, **options):
         checked = 0
-        for username in ('demo_reception','demo_master','demo_quality','demo_manager','demo_admin'):
-            user = User.objects.filter(username=username,is_active=True).first()
-            if not user: raise CommandError('Сначала seed_demo')
+        for role in ('Приём', 'Мастер', 'Контроль качества', 'Руководитель', 'Администратор'):
+            user = User.objects.filter(groups__name=role, is_active=True).order_by('pk').first()
+            if not user: raise CommandError(f'Нет активного сотрудника роли: {role}')
+            username = user.username
             client = Client(HTTP_HOST='localhost')
             client.force_login(user)
             paths = ['/dashboard/','/orders/','/api/orders/']
-            if username in ('demo_reception','demo_manager','demo_admin'): paths += ['/clients/']
-            if username == 'demo_manager': paths += ['/masters/','/reports/','/reports/?format=csv','/reports/?format=xlsx']
-            if username == 'demo_admin': paths += ['/admin/']
+            if role in ('Приём', 'Руководитель', 'Администратор'): paths += ['/clients/']
+            if role in ('Приём', 'Мастер'): paths += ['/price/']
+            if role == 'Руководитель': paths += ['/masters/','/reports/','/reports/?format=csv','/reports/?format=xlsx']
+            if role == 'Администратор': paths += ['/admin/']
             for path in paths:
                 result = client.get(path)
                 if result.status_code != 200: raise CommandError(f'{username} {path}: {result.status_code}')

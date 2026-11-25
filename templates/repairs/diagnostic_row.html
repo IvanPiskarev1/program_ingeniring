@@ -1,0 +1,5 @@
+<fieldset class="diagnostic-row" style="margin:24px 0;padding:16px;min-width:0"><legend>Позиция</legend>
+{{ row.non_field_errors }}{{ row.catalog_id }}{{ row.catalog_id.errors }}
+{% for field in row.visible_fields %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}{% if field.name == 'name' %}<div class="suggestions" aria-live="polite"></div>{% endif %}</div>{% endfor %}
+<button type="submit" class="button secondary remove-row" name="remove_row" value="{{ forloop.counter0 }}" formnovalidate>Удалить строку</button>
+</fieldset>
